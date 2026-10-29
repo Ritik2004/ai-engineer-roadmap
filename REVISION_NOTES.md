@@ -191,3 +191,121 @@ repeat (max_steps):
 - Why do frameworks like LangGraph exist? → They manage this loop, state and branching for you.
 
 **In my words:**
+
+---
+
+## RAG Step 1: Why RAG
+
+**What:** RAG = **R**etrieval (find the relevant text) + **A**ugmented (add it to the prompt) + **G**eneration (the LLM answers from it).
+
+**Why:** The LLM doesn't know your private or recent data. Without context it guesses (it said "10 to 20 days" for Ritik Tech); with context it answered "24 paid leaves".
+
+**Key code:**
+```python
+def build_prompt(context, question):
+    return f"""Answer only using the context below. If the answer is not there say "I don't know".
+
+Context:
+{context}
+
+Question: {question}"""
+```
+
+**Remember:**
+- "Answer only from the context + say I don't know" reduces hallucination.
+- Pasting **all** documents doesn't scale (context window limits + cost), so we retrieve **only the relevant chunks**.
+
+**Interview Qs:**
+- What problems does RAG solve? → Hallucination, knowledge cutoff, private data.
+- Why not put every document in the prompt? → Context limits, cost, latency, and "lost in the middle".
+
+**In my words:**
+
+---
+
+## RAG Step 2: Embeddings
+
+**What:** An embedding turns text into a **fixed-length list of numbers (a vector)** that captures its **meaning**. Similar meanings → similar vectors, even with different words ("paid leaves" ≈ "holidays").
+
+**Key code:**
+```python
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer("all-MiniLM-L6-v2")   # free, local, 384 dimensions
+embeddings = model.encode(sentences)               # NumPy array, shape (5, 384)
+embeddings[0]        # all 384 numbers of sentence 1 (one row)
+embeddings[0][:5]    # first 5 numbers
+```
+
+**Remember:**
+- Shape `(5, 384)` = 5 sentences × 384 numbers. Every sentence gets 384, whether long or short.
+- A single number means nothing on its own. Only **comparing** vectors is useful.
+- Use the **same model** for documents and questions.
+
+**Interview Qs:**
+- What is an embedding? → A dense vector representing the meaning of text.
+- Why embeddings instead of keyword search? → They match by meaning, not exact words.
+- Can you mix embedding models? → No. Vectors from different models aren't comparable.
+
+**In my words:**
+
+---
+
+## RAG Step 3: Cosine similarity (retrieval)
+
+**What:** A score for how similar two vectors are: **1 = same meaning, 0 = unrelated**. It measures the **angle** between two arrows, so only direction matters, not length.
+
+**Formula:** `cosine(a, b) = (a · b) / (|a| × |b|)`
+
+**Key code:**
+```python
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))      # zip pairs matching numbers
+    len_a = math.sqrt(sum(x * x for x in a))
+    len_b = math.sqrt(sum(x * x for x in b))
+    return dot / (len_a * len_b)
+
+score = cosine(q_vec, vector)    # always TWO VECTORS, never a string
+```
+
+**Remember:**
+- Retrieval = embed the question → score it against every chunk → take the highest (top-k).
+- "leaves in a year" matched "paid leaves per year", and "holidays" also scored high without sharing the word. That's search by meaning.
+- A vector DB does the same thing, just faster at scale.
+
+**Interview Qs:**
+- How does semantic search work? → Embed the query, cosine similarity against the stored embeddings, return top-k.
+- Why cosine and not plain distance? → It compares direction (meaning), not vector length.
+
+**In my words:**
+
+---
+
+## RAG Step 4: Chunking
+
+**What:** Splitting long documents into small pieces before embedding them.
+
+**Why:** One embedding for a whole document is too vague, and the LLM only needs the relevant part (cheaper, faster, more accurate).
+
+**Key code:**
+```python
+def chunk_text(text, chunk_size, overlap):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start = end - overlap        # step back so boundary text isn't lost
+    return chunks
+```
+
+**Remember:**
+- Without overlap, "Internet bills u | p to Rs 1,000" got cut in half across two chunks.
+- `overlap` must be smaller than `chunk_size`, or the loop never moves forward.
+- Fixed-size chunking cuts mid-sentence. Better: split on paragraphs/sentences first (LangChain `RecursiveCharacterTextSplitter`).
+
+**Interview Qs:**
+- Chunks too big? → Vague embeddings + irrelevant text sent to the LLM.
+- Chunks too small? → Context lost (a fact separated from its subject).
+- Typical values? → 200–1000 tokens, 10–20% overlap, tuned with evals.
+
+**In my words:**
