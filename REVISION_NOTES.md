@@ -309,3 +309,65 @@ def chunk_text(text, chunk_size, overlap):
 - Typical values? → 200–1000 tokens, 10–20% overlap, tuned with evals.
 
 **In my words:**
+
+---
+
+## RAG Step 5: Mini RAG (full pipeline from scratch)
+
+**Pipeline:**
+```
+INDEXING (once):   document → chunk_text() → model.encode(chunks) → chunk_vectors
+QUERYING (each):   question → encode → cosine vs every chunk → sort → top k → build_prompt → LLM
+```
+
+**Key code:**
+```python
+def retrieve(question, k=2):
+    q_vec = model.encode(question)
+    scored = [(cosine(q_vec, vec), chunk) for chunk, vec in zip(chunks, chunk_vectors)]
+    scored.sort(reverse=True)                    # highest score first
+    return [chunk for score, chunk in scored[:k]]
+
+def rag(question):
+    context = "\n\n".join(retrieve(question))    # list → one string
+    return ask(build_prompt(context, question))
+```
+
+**Remember:**
+- Top-k (not just the best one), because an answer can span chunks.
+- **Debug rule:** print the retrieved chunks first. Right chunk missing → **retrieval** problem. Right chunk present but wrong answer → **generation** problem.
+- Python: `"\n\n".join(list)` glues strings together · `[x for a, x in pairs[:k]]` is a short for-loop (list comprehension).
+
+**Interview Qs:**
+- Walk me through a RAG pipeline. → Indexing (chunk, embed, store) + querying (embed the question, retrieve top-k, augment the prompt, generate).
+- Your RAG gives a wrong answer. How do you debug it? → Check the retrieved chunks first to separate retrieval from generation.
+
+**In my words:**
+
+---
+
+## RAG Step 6: Vector database (Qdrant)
+
+**Why a vector DB instead of a Python list:** fast search at scale (ANN), data saved to disk (no re-embedding every run), and metadata (payload) for sources and filters.
+
+**Key code:**
+```python
+db = QdrantClient(path="./qdrant_db")                     # local, saved to disk
+db.create_collection("hr_policy",
+    vectors_config=VectorParams(size=384, distance=Distance.COSINE))   # size must match the embedding model
+db.upsert("hr_policy", points=[PointStruct(id=i, vector=vec, payload={"text": chunk, "source": "hr_policy.txt"})])
+results = db.query_points("hr_policy", query=q_vec, limit=k).points
+texts = [p.payload["text"] for p in results]              # p.score = cosine score
+```
+
+**Remember:**
+- `upsert` = update if the id exists, insert if not (safe to re-run)
+- **ANN / HNSW:** Approximate Nearest Neighbour search; HNSW is a layered graph you hop through toward the closest vectors instead of comparing all of them. Trades a tiny bit of accuracy for huge speed.
+- Options: Chroma (learning), **Qdrant** / **pgvector** / Pinecone / Weaviate / Milvus (production), **Azure AI Search** (enterprise, Big 4), FAISS (a library, not a DB)
+
+**Interview Qs:**
+- Why use a vector DB? → ANN speed at scale, persistence, metadata filtering.
+- What is HNSW? → A graph-based ANN index: fast approximate top-k search.
+- Which vector DB would you pick? → pgvector if already on Postgres, Qdrant for open source + hybrid search, a managed one (Pinecone / Azure AI Search) for no-ops.
+
+**In my words:**

@@ -22,3 +22,5 @@
 - ✅ Step 2: Embeddings (text → 384-number vector with sentence-transformers), 29 Oct: [RAG/embedding.py](RAG/embedding.py)
 - ✅ Step 3: Cosine similarity from scratch + best match (retrieval), 29 Oct: [RAG/cosine_similarity.py](RAG/cosine_similarity.py)
 - ✅ Step 4: Chunking (fixed size + overlap), 29 Oct: [RAG/chunking.py](RAG/chunking.py)
+- ✅ Step 5: Mini RAG from scratch (chunk → embed → top-k retrieve → prompt → Groq), 30 Oct: [mini-rag.py](mini-rag.py)
+- ✅ Step 6: Vector DB with Qdrant (store vectors + payload on disk, query top-k), 30 Oct: [RAG/qdrant.py](RAG/qdrant.py)

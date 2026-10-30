@@ -14,7 +14,7 @@ def ask(prompt):
                 model="openai/gpt-oss-20b",
                 messages=[{
                     "role":"user",
-                    "content":rag_prompt
+                    "content":prompt
                 }],
             )
     return response.choices[0].message.content;
